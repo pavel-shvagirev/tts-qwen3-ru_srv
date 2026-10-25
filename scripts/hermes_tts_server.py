@@ -24,8 +24,9 @@ MODEL_ID = os.environ.get(
 )
 HOST = os.environ.get("QWEN_TTS_HOST", "127.0.0.1")
 PORT = int(os.environ.get("QWEN_TTS_PORT", "8031"))
-# Generation cap in codec tokens. mlx-audio defaults to 2048 (~164 s at 12.5 Hz),
-# which silently truncates long inputs.
+# Generation cap in codec tokens (12.5 per second of audio). The checkpoint's
+# generation_config.json allows 8192 (~11 min); generation also stops earlier at
+# the codec EOS token. A lower cap bounds output if EOS is missed.
 MAX_TOKENS = int(os.environ.get("QWEN_TTS_MAX_TOKENS", "4096"))
 # Offline mode: if this file exists next to the server, checksums are not checked.
 SKIP_VERIFY_MARKER = Path(__file__).resolve().parent / "SKIP_MODEL_VERIFY"

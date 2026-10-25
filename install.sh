@@ -29,9 +29,10 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
   echo "Error: $PYTHON not found. Install Python (3.12 preferred)." >&2
   exit 1
 }
-# macOS ships python3 3.9 with the Command Line Tools; mlx-audio needs 3.10+.
-"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || {
-  echo "Error: $PYTHON is $("$PYTHON" -V 2>&1); Python 3.10+ is required." >&2
+# Command Line Tools ship python3 3.9; 3.10 is end-of-life and gets no fixed
+# filelock (security fixes need 3.11+).
+"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 11))' || {
+  echo "Error: $PYTHON is $("$PYTHON" -V 2>&1); Python 3.11+ is required." >&2
   echo "  Install one (brew install python@3.12) and rerun with PYTHON=python3.12 $0" >&2
   exit 1
 }
@@ -63,8 +64,9 @@ if [ ! -x "$VENV/bin/python" ]; then
 fi
 
 # huggingface_hub>=1.10 provides `hf cache verify`, used by the server on start.
+# filelock>=4.2.1 has security fixes; pip does not upgrade it in a reused venv.
 if command -v uv >/dev/null 2>&1; then
-  uv pip install --python "$VENV/bin/python" 'mlx-audio[server]==0.6.1' 'huggingface_hub>=1.10'
+  uv pip install --python "$VENV/bin/python" 'mlx-audio[server]==0.6.1' 'huggingface_hub>=1.10' 'filelock>=4.2.1'
 else
   "$VENV/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || {
     echo "pip/ensurepip unavailable. Install uv (brew install uv), then rerun:" >&2
@@ -72,7 +74,7 @@ else
     exit 1
   }
   "$VENV/bin/python" -m pip install --upgrade pip
-  "$VENV/bin/python" -m pip install 'mlx-audio[server]==0.6.1' 'huggingface_hub>=1.10'
+  "$VENV/bin/python" -m pip install 'mlx-audio[server]==0.6.1' 'huggingface_hub>=1.10' 'filelock>=4.2.1'
 fi
 
 # launchd does not see the shell environment: pass a custom HF cache explicitly.
