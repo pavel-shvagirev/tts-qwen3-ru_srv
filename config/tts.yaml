@@ -1,0 +1,13 @@
+# Merge this into ~/.hermes/config.yaml. DO NOT OVERWRITE THE WHOLE FILE.
+# Replace /ABSOLUTE/PATH/TO/INSTALL with the install directory. Keep the inner
+# double quotes: the default directory contains a space ("Application Support").
+tts:
+  provider: qwen3-voice
+  providers:
+    qwen3-voice:
+      type: command
+      command: '"/ABSOLUTE/PATH/TO/INSTALL/.venv/bin/python" "/ABSOLUTE/PATH/TO/INSTALL/scripts/hermes_tts_client.py" {input_path} {output_path} {voice}'
+      voice: "Native Russian speaker, female, about 35 years old. Natural modern Russian speech without a foreign accent. Calm, composed and businesslike, like an experienced professional delivering a formal report. Medium-low pitch, even and clear timbre, precise articulation. Steady moderate pace with short pauses between sentences. Neutral, restrained intonation with little emotional variation. Serious and matter-of-fact, without theatrical or dramatic emphasis."
+      output_format: wav
+      timeout: 300
+      max_text_length: 2000

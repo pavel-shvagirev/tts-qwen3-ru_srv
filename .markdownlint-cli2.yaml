@@ -1,0 +1,6 @@
+config:
+  MD013: false  # long table rows and prose lines are intended
+  MD024:
+    siblings_only: true  # CHANGELOG repeats "Добавлено" under each version
+ignores:
+  - ".venv/**"
