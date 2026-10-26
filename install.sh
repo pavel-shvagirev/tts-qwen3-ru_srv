@@ -48,6 +48,13 @@ for value in "$QWEN_TTS_PORT" "$QWEN_TTS_MAX_TOKENS" "$QWEN_TTS_LOG_MAX_BYTES" "
     '' | *[!0-9]*) echo "Error: expected a positive integer: $value" >&2; exit 1 ;;
   esac
 done
+# Optional sampling overrides; unset means the model's generation_config.json.
+for value in "${QWEN_TTS_TEMPERATURE:-}" "${QWEN_TTS_TOP_P:-}"; do
+  case "$value" in
+    '') ;;
+    .* | *. | *[!0-9.]* | *.*.*) echo "Error: expected a decimal number like 0.9: $value" >&2; exit 1 ;;
+  esac
+done
 
 mkdir -p "$INSTALL_DIR/scripts" "$INSTALL_DIR/logs"
 cp "$PACKAGE_DIR/scripts/hermes_tts_server.py" "$INSTALL_DIR/scripts/"
@@ -77,11 +84,18 @@ else
   "$VENV/bin/python" -m pip install 'mlx-audio[server]==0.6.1' 'huggingface_hub>=1.10' 'filelock>=4.2.1'
 fi
 
-# launchd does not see the shell environment: pass a custom HF cache explicitly.
-HF_HOME_ENTRY=""
-if [ -n "${HF_HOME:-}" ]; then
-  HF_HOME_ENTRY="<key>HF_HOME</key><string>$HF_HOME</string>"
-fi
+# Optional variables go into the plist only when set. launchd does not see the
+# shell environment, so a custom HF cache must be passed explicitly.
+OPTIONAL_ENV=""
+add_optional_env() {  # NAME VALUE; skipped when VALUE is empty
+  if [ -n "$2" ]; then
+    OPTIONAL_ENV="$OPTIONAL_ENV    <key>$1</key><string>$2</string>
+"
+  fi
+}
+add_optional_env HF_HOME "${HF_HOME:-}"
+add_optional_env QWEN_TTS_TEMPERATURE "${QWEN_TTS_TEMPERATURE:-}"
+add_optional_env QWEN_TTS_TOP_P "${QWEN_TTS_TOP_P:-}"
 
 PLIST_DIR="$HOME/Library/LaunchAgents"
 mkdir -p "$PLIST_DIR"
@@ -112,8 +126,7 @@ cat > "$PLIST" <<EOF
     <key>QWEN_TTS_LOG_DIR</key><string>$INSTALL_DIR/logs</string>
     <key>QWEN_TTS_LOG_MAX_BYTES</key><string>$QWEN_TTS_LOG_MAX_BYTES</string>
     <key>QWEN_TTS_LOG_BACKUPS</key><string>$QWEN_TTS_LOG_BACKUPS</string>
-    $HF_HOME_ENTRY
-  </dict>
+$OPTIONAL_ENV  </dict>
 </dict>
 </plist>
 EOF

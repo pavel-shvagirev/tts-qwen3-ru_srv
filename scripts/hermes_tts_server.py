@@ -28,6 +28,18 @@ PORT = int(os.environ.get("QWEN_TTS_PORT", "8031"))
 # generation_config.json allows 8192 (~11 min); generation also stops earlier at
 # the codec EOS token. A lower cap bounds output if EOS is missed.
 MAX_TOKENS = int(os.environ.get("QWEN_TTS_MAX_TOKENS", "4096"))
+
+
+def env_float(name: str) -> float | None:
+    value = os.environ.get(name)
+    return float(value) if value else None
+
+
+# Sampling overrides. Unset (None) lets mlx-audio take the checkpoint's
+# generation_config.json values. The former fixed 0.6/0.9 made the model stop
+# speaking early and never emit EOS (BUG-1, see CHANGELOG.md).
+TEMPERATURE = env_float("QWEN_TTS_TEMPERATURE")
+TOP_P = env_float("QWEN_TTS_TOP_P")
 # Offline mode: if this file exists next to the server, checksums are not checked.
 SKIP_VERIFY_MARKER = Path(__file__).resolve().parent / "SKIP_MODEL_VERIFY"
 
@@ -148,8 +160,8 @@ class SpeechRequest(BaseModel):
     instruct: str = Field(min_length=1, max_length=3000)
     language: str = "Russian"
     seed: int = 42
-    temperature: float = 0.6
-    top_p: float = 0.9
+    temperature: float | None = None  # None: QWEN_TTS_TEMPERATURE, then the model config
+    top_p: float | None = None  # None: QWEN_TTS_TOP_P, then the model config
     format: Literal["wav", "mp3"] = "wav"
 
 
@@ -162,21 +174,36 @@ def health(response: Response):
 
 def synthesize_audio(req: SpeechRequest) -> bytes:
     mx.random.seed(req.seed)
-    chunks = [
-        np.array(result.audio.astype(mx.float32))
-        for result in model.generate_voice_design(
+    temperature = req.temperature if req.temperature is not None else TEMPERATURE
+    top_p = req.top_p if req.top_p is not None else TOP_P
+    results = list(
+        model.generate_voice_design(
             text=req.text,
             language=req.language,
             instruct=req.instruct,
-            temperature=req.temperature,
-            top_p=req.top_p,
+            temperature=temperature,
+            top_p=top_p,
             max_tokens=MAX_TOKENS,
         )
-    ]
-    if not chunks:
+    )
+    if not results:
         raise RuntimeError("Model returned no audio")
+    audio = np.concatenate([np.array(result.audio.astype(mx.float32)) for result in results])
+    # Generation stops at the codec EOS token, so token_count reaching MAX_TOKENS
+    # means EOS was never emitted (the BUG-1 symptom, see CHANGELOG.md).
+    tokens = sum(result.token_count for result in results)
+    logging.info(
+        "Synthesized %d chars: %d of %d max tokens (%s), %.1f s audio, temperature=%s top_p=%s",
+        len(req.text),
+        tokens,
+        MAX_TOKENS,
+        "EOS missed" if tokens >= MAX_TOKENS else "EOS reached",
+        audio.shape[0] / model.sample_rate,
+        "model" if temperature is None else temperature,
+        "model" if top_p is None else top_p,
+    )
     buf = io.BytesIO()
-    audio_write(buf, np.concatenate(chunks), model.sample_rate, format=req.format)
+    audio_write(buf, audio, model.sample_rate, format=req.format)
     return buf.getvalue()
 
 
